@@ -10,7 +10,7 @@ from coldmail.quality import local_quality_check
 load_dotenv()
 st.set_page_config(page_title="ColdMail Pro", page_icon="✉️", layout="wide")
 st.title("✉️ ColdMail Pro — AI Cold Email Agent")
-st.caption("Create relevant cold-email drafts for any legitimate service. Draft-only by default.")
+st.caption("Specific, evidence-led cold emails for any legitimate service. Draft-only by default.")
 
 with st.sidebar:
     st.header("Configuration")
@@ -27,42 +27,93 @@ with st.sidebar:
 
 create_tab, leads_tab, notes_tab = st.tabs(["Create emails", "Lead CSV", "Campaign notes"])
 with create_tab:
+    st.subheader("Build the offer and audience picture")
     left, right = st.columns(2)
     with left:
-        offer = st.text_area("What service are you offering?", height=140, placeholder="Describe what it does, who it helps, and the outcome.")
-        proof = st.text_area("Verified proof (optional)", placeholder="Only include real, supportable proof.")
+        offer = st.text_area(
+            "What service are you offering?", height=120,
+            placeholder="What do you do, who is it for, and what changes after they use it?"
+        )
+        proof = st.text_area(
+            "Verified proof (optional)", height=90,
+            placeholder="Real results, relevant experience, examples, credentials, or a concrete process. No guesses."
+        )
+        differentiator = st.text_area(
+            "What makes your way of doing it credible or different? (optional)",
+            height=80, placeholder="A real method, useful detail, or reason to believe. Leave blank if none."
+        )
     with right:
-        audience = st.text_area("Who do you want to reach?", height=140, placeholder="Industry, company size, roles, geography, buying context.")
-        segment = st.text_input("Audience segment (optional)")
-    prospect_raw = st.text_area("Verified prospect facts (optional)", placeholder="Only accurate facts and their source/context.")
+        audience = st.text_area(
+            "Who do you want to reach?", height=120,
+            placeholder="Industry, role, company type/size, location, and buying situation."
+        )
+        segment = st.text_input(
+            "Audience segment (optional)",
+            placeholder="A distinct group with a shared situation or need"
+        )
+        segment_problem = st.text_area(
+            "What problem or opportunity matters to this segment? (optional)",
+            height=80, placeholder="Separate what you know from what you suspect."
+        )
+        desired_outcome = st.text_area(
+            "What outcome do they want? (optional)",
+            height=80, placeholder="Describe a practical result without promising it."
+        )
+    prospect_raw = st.text_area(
+        "Prospect-specific facts + source (optional)",
+        placeholder="Example: Their menu page lists no prices (checked on their official website on [date]). Only include facts you actually verified."
+    )
+    st.caption("No prospect research? That's fine. The agent must not pretend it researched someone. It will write to the audience segment without inventing personal observations.")
     step = st.selectbox("Email type", ["First email", "Follow-up 1", "Follow-up 2", "Break-up email"])
     if st.button("Generate cold email", type="primary", disabled=not (api_key and offer.strip() and audience.strip())):
         try:
-            prospect = json.loads(prospect_raw) if prospect_raw.strip().startswith("{") else {"verified_context": prospect_raw}
-            with st.spinner("Writing and checking..."):
-                draft = ColdMailAgent(api_key, model, provider="gemini").generate(offer, audience, proof, prospect, segment, step)
+            prospect = json.loads(prospect_raw) if prospect_raw.strip().startswith("{") else {"verified_context": prospect_raw} if prospect_raw.strip() else {}
+            with st.spinner("Writing and checking for relevance, truth and generic wording..."):
+                draft = ColdMailAgent(api_key, model, provider="gemini").generate(
+                    offer, audience, proof, prospect, segment, step,
+                    segment_problem, desired_outcome, differentiator
+                )
             st.session_state["draft"] = draft
             st.session_state["offer"] = offer
             st.session_state["audience"] = audience
+            st.session_state["verified_prospect"] = prospect
         except Exception as exc:
             st.error(f"Generation failed: {exc}")
     draft = st.session_state.get("draft")
     if draft:
+        st.divider()
         st.subheader("Draft")
         st.text_input("Subject", value=draft.get("subject", ""), key="subject_edit")
         st.text_area("Email body", value=draft.get("email", ""), height=220, key="body_edit")
-        st.write("Rationale:", draft.get("rationale", ""))
-        st.write("Personalization:", draft.get("personalization_used", ""))
+        st.write("Why this angle:", draft.get("rationale", ""))
+        st.write("Personalization actually used:", draft.get("personalization_used", ""))
+        st.write("Evidence used:", draft.get("evidence_used", "None stated"))
         if draft.get("assumptions_or_missing_facts"):
-            st.warning(str(draft["assumptions_or_missing_facts"]))
-        check = local_quality_check(st.session_state.get("subject_edit", draft.get("subject", "")), st.session_state.get("body_edit", draft.get("email", "")))
+            st.warning("Facts to verify / information missing: " + str(draft["assumptions_or_missing_facts"]))
+        if draft.get("segment_fit"):
+            st.write("Segment fit:", draft["segment_fit"])
+        score = draft.get("quality_score")
+        if score is not None:
+            st.metric("Agent's honest draft score", f"{score}/10")
+        if draft.get("quality_notes"):
+            st.caption("Score explanation: " + str(draft["quality_notes"]))
+        check = local_quality_check(
+            st.session_state.get("subject_edit", draft.get("subject", "")),
+            st.session_state.get("body_edit", draft.get("email", "")),
+            verified_facts=st.session_state.get("verified_prospect", {})
+        )
         if check["passed"]:
-            st.success(f"Basic checks passed ({check['word_count']} words). Review manually.")
+            st.success(f"Local checks passed ({check['word_count']} words). This is not a guarantee; review the facts before use.")
         else:
-            st.warning("Quality issues: " + " | ".join(check["issues"]))
+            st.warning("Fix these before use: " + " | ".join(check["issues"]))
         if st.button("AI quality review", disabled=not api_key):
             try:
-                st.json(ColdMailAgent(api_key, model, provider="gemini").review(st.session_state["body_edit"], st.session_state.get("offer", ""), st.session_state.get("audience", "")))
+                review = ColdMailAgent(api_key, model, provider="gemini").review(
+                    st.session_state["body_edit"],
+                    st.session_state.get("offer", ""),
+                    st.session_state.get("audience", "")
+                )
+                st.json(review)
             except Exception as exc:
                 st.error(str(exc))
         st.divider()
@@ -94,4 +145,4 @@ with leads_tab:
 
 with notes_tab:
     st.text_area("Campaign learnings, replies, objections, and next tests", height=220)
-    st.caption("Prioritize positive replies and qualified conversations over opens.")
+    st.caption("Learn from positive replies, qualified conversations, and objections—not opens alone.")
