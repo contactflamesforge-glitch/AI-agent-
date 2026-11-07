@@ -14,9 +14,16 @@ st.caption("Create relevant cold-email drafts for any legitimate service. Draft-
 
 with st.sidebar:
     st.header("Configuration")
-    api_key = st.text_input("OpenAI API key", value=os.getenv("OPENAI_API_KEY", ""), type="password")
-    model = st.text_input("Model", value=os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
-    st.info("Your key is used for generation. Never commit it to GitHub.")
+    provider = st.selectbox("AI provider", ["Google Gemini (free tier)"], index=0)
+    api_key = st.text_input(
+        "Google Gemini API key",
+        value=os.getenv("GEMINI_API_KEY", ""),
+        type="password",
+        help="Create a key in Google AI Studio. Keep it private; never commit it to GitHub."
+    )
+    model = st.text_input("Model", value=os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite"))
+    st.info("Gemini offers a free API tier with usage limits. Free-tier data may be used by Google to improve its products. Avoid entering confidential or sensitive prospect information.")
+    st.caption("Your API key is used only for generation. Never share it or commit it to GitHub.")
 
 create_tab, leads_tab, notes_tab = st.tabs(["Create emails", "Lead CSV", "Campaign notes"])
 with create_tab:
@@ -33,7 +40,7 @@ with create_tab:
         try:
             prospect = json.loads(prospect_raw) if prospect_raw.strip().startswith("{") else {"verified_context": prospect_raw}
             with st.spinner("Writing and checking..."):
-                draft = ColdMailAgent(api_key, model).generate(offer, audience, proof, prospect, segment, step)
+                draft = ColdMailAgent(api_key, model, provider="gemini").generate(offer, audience, proof, prospect, segment, step)
             st.session_state["draft"] = draft
             st.session_state["offer"] = offer
             st.session_state["audience"] = audience
@@ -55,7 +62,7 @@ with create_tab:
             st.warning("Quality issues: " + " | ".join(check["issues"]))
         if st.button("AI quality review", disabled=not api_key):
             try:
-                st.json(ColdMailAgent(api_key, model).review(st.session_state["body_edit"], st.session_state.get("offer", ""), st.session_state.get("audience", "")))
+                st.json(ColdMailAgent(api_key, model, provider="gemini").review(st.session_state["body_edit"], st.session_state.get("offer", ""), st.session_state.get("audience", "")))
             except Exception as exc:
                 st.error(str(exc))
         st.divider()
