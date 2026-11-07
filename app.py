@@ -21,7 +21,7 @@ with st.sidebar:
         type="password",
         help="Create a key in Google AI Studio. Keep it private; never commit it to GitHub."
     )
-    model = st.text_input("Model", value=os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite"))
+    model = st.text_input("Model", value=os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite"))
     st.info("Gemini offers a free API tier with usage limits. Free-tier data may be used by Google to improve its products. Avoid entering confidential or sensitive prospect information.")
     st.caption("Your API key is used only for generation. Never share it or commit it to GitHub.")
 
