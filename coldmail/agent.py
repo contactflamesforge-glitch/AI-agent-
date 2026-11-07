@@ -1,25 +1,38 @@
 import json
 import os
-from openai import OpenAI
+from google import genai
+from google.genai import types
 from .prompts import SYSTEM_PROMPT, generation_prompt, review_prompt
 from .quality import local_quality_check
 
+
 class ColdMailAgent:
-    def __init__(self, api_key=None, model=None):
-        key = api_key or os.getenv("OPENAI_API_KEY")
+    def __init__(self, api_key=None, model=None, provider="gemini"):
+        self.provider = provider
+        if provider != "gemini":
+            raise ValueError("Unsupported AI provider. Select Google Gemini.")
+        key = api_key or os.getenv("GEMINI_API_KEY")
         if not key:
-            raise ValueError("Set OPENAI_API_KEY in your environment or .env file.")
-        self.client = OpenAI(api_key=key)
-        self.model = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+            raise ValueError("Add your Google Gemini API key in the app configuration.")
+        self.client = genai.Client(api_key=key)
+        self.model = model or os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
 
     def _json(self, prompt):
-        response = self.client.chat.completions.create(
-            model=self.model, temperature=0.7,
-            response_format={"type": "json_object"},
-            messages=[{"role": "system", "content": SYSTEM_PROMPT},
-                      {"role": "user", "content": prompt}],
+        response = self.client.models.generate_content(
+            model=self.model,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                temperature=0.7,
+                response_mime_type="application/json",
+            ),
         )
-        return json.loads(response.choices[0].message.content)
+        if not response.text:
+            raise RuntimeError("Gemini returned an empty response. Please try again.")
+        try:
+            return json.loads(response.text)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("Gemini returned a response that was not valid JSON. Please try again.") from exc
 
     def generate(self, offer, audience, proof="", prospect=None, segment="", step="First email"):
         data = self._json(generation_prompt(offer, audience, proof, prospect or {}, segment, step))
