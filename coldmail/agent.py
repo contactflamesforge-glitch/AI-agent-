@@ -23,7 +23,7 @@ class ColdMailAgent:
             contents=prompt,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
-                temperature=0.7,
+                temperature=0.55,
                 response_mime_type="application/json",
             ),
         )
@@ -34,11 +34,17 @@ class ColdMailAgent:
         except json.JSONDecodeError as exc:
             raise RuntimeError("Gemini returned a response that was not valid JSON. Please try again.") from exc
 
-    def generate(self, offer, audience, proof="", prospect=None, segment="", step="First email"):
-        data = self._json(generation_prompt(offer, audience, proof, prospect or {}, segment, step))
+    def generate(self, offer, audience, proof="", prospect=None, segment="", step="First email",
+                 segment_problem="", desired_outcome="", differentiator=""):
+        data = self._json(generation_prompt(
+            offer, audience, proof, prospect or {}, segment, step,
+            segment_problem, desired_outcome, differentiator
+        ))
         data.setdefault("subject", "")
         data.setdefault("email", "")
-        data["local_check"] = local_quality_check(data["subject"], data["email"])
+        data["local_check"] = local_quality_check(
+            data["subject"], data["email"], verified_facts=prospect
+        )
         return data
 
     def review(self, email, offer, audience):
