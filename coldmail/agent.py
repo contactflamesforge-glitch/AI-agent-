@@ -15,7 +15,7 @@ class ColdMailAgent:
         if not key:
             raise ValueError("Add your Google Gemini API key in the app configuration.")
         self.client = genai.Client(api_key=key)
-        self.model = model or os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
+        self.model = model or os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 
     def _json(self, prompt):
         response = self.client.models.generate_content(
